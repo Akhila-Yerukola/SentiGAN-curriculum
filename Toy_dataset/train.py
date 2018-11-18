@@ -108,20 +108,25 @@ def main():
     gen_data_loader = Gen_Data_loader(BATCH_SIZE)
     likelihood_data_loader = Gen_Data_loader(BATCH_SIZE)  # For testing
     dis_data_loader = Dis_Data_loader(BATCH_SIZE)
+    generator = None
+    discriminator = None
+    target_lstm = None
+
 
     while seq_len <= SEQ_LENGTH:
-        generator = Generator(vocab_size, BATCH_SIZE, EMB_DIM, HIDDEN_DIM, seq_len, START_TOKEN)
+        print("Current sequence length is " + str(seq_len))
+        generator = Generator(vocab_size, BATCH_SIZE, EMB_DIM, HIDDEN_DIM, SEQ_LENGTH, START_TOKEN) if generator is None else generator
 
 
         # target_params's size: [15 * 5000 * 32]
         target_params = pickle.load(open('./save/target_params_py3.pkl', 'rb'))
         # The oracle model
-        target_lstm = TARGET_LSTM(5000, BATCH_SIZE, EMB_DIM, HIDDEN_DIM, seq_len, 0, target_params)
+        target_lstm = TARGET_LSTM(5000, BATCH_SIZE, EMB_DIM, HIDDEN_DIM, SEQ_LENGTH, 0, target_params) if target_lstm is None else target_lstm
 
-        discriminator = Discriminator(sequence_length=seq_len, num_classes=2, vocab_size=vocab_size,
+        discriminator = Discriminator(sequence_length=SEQ_LENGTH, num_classes=2, vocab_size=vocab_size,
                                       embedding_size=dis_embedding_dim,
                                       filter_sizes=dis_filter_sizes, num_filters=dis_num_filters,
-                                      l2_reg_lambda=dis_l2_reg_lambda)
+                                      l2_reg_lambda=dis_l2_reg_lambda) if discriminator is None else discriminator
 
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = True
@@ -129,7 +134,7 @@ def main():
         sess.run(tf.global_variables_initializer())
 
         generate_samples_from_target(sess, target_lstm, BATCH_SIZE, generated_num, positive_file)
-        gen_data_loader.create_batches(positive_file)
+        gen_data_loader.create_batches(positive_file, seq_len)
 
         # print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
         #
@@ -145,12 +150,12 @@ def main():
         print('Start pre-training...')
         log.write('pre-training...\n')
         ans_file = open("learning_cure.txt", 'w')
-        epochs = 30 if seq_len==18 else 20
+        epochs = 15
         for epoch in range(epochs):  # 120
             loss = pre_train_epoch(sess, generator, gen_data_loader)
             if epoch % 1 == 0:
                 generate_samples(sess, generator, BATCH_SIZE, generated_num, eval_file)
-                likelihood_data_loader.create_batches(eval_file)
+                likelihood_data_loader.create_batches(eval_file, seq_len)
                 test_loss = target_loss(sess, target_lstm, likelihood_data_loader)
                 print('pre-train epoch ', epoch, 'test_loss ', test_loss)
                 buffer = 'epoch:\t' + str(epoch) + '\tnll:\t' + str(test_loss) + '\n'
@@ -160,9 +165,9 @@ def main():
         buffer = 'Start pre-training discriminator...'
         print(buffer)
         log.write(buffer)
-        for _ in range(5):   # 10
+        for _ in range(4):   # 10
             generate_samples(sess, generator, BATCH_SIZE, generated_num, negative_file)
-            dis_data_loader.load_train_data(positive_file, negative_file)
+            dis_data_loader.load_train_data(positive_file, negative_file, seq_len)
             for _ in range(3):
                 dis_data_loader.reset_pointer()
                 for it in range(dis_data_loader.num_batch):
@@ -216,7 +221,7 @@ def main():
             # Test
             if total_batch % 1 == 0 or total_batch == TOTAL_BATCH - 1:
                 generate_samples(sess, generator, BATCH_SIZE, generated_num, eval_file)
-                likelihood_data_loader.create_batches(eval_file)
+                likelihood_data_loader.create_batches(eval_file, seq_len)
                 test_loss = target_loss(sess, target_lstm, likelihood_data_loader)
                 buffer = 'reward-train epoch %s train loss %s test_loss %s\n' % (str(total_batch), str(rewards_loss), str(test_loss))
                 print(buffer)
@@ -227,7 +232,7 @@ def main():
             # Train the discriminator
             for _ in range(1):
                 generate_samples(sess, generator, BATCH_SIZE, generated_num, negative_file)
-                dis_data_loader.load_train_data(positive_file, negative_file)
+                dis_data_loader.load_train_data(positive_file, negative_file, seq_len)
                 for _ in range(3):
                     dis_data_loader.reset_pointer()
                     for it in range(dis_data_loader.num_batch):
