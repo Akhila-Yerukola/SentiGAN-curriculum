@@ -102,128 +102,65 @@ def pre_train_epoch(sess, trainable_model, data_loader):
 def main():
     random.seed(SEED)
     np.random.seed(SEED)
-
+    seq_len = 18
 
     # prepare data
     gen_data_loader = Gen_Data_loader(BATCH_SIZE)
     likelihood_data_loader = Gen_Data_loader(BATCH_SIZE)  # For testing
     dis_data_loader = Dis_Data_loader(BATCH_SIZE)
 
+    while seq_len <= SEQ_LENGTH:
+        generator = Generator(vocab_size, BATCH_SIZE, EMB_DIM, HIDDEN_DIM, seq_len, START_TOKEN)
 
-    generator = Generator(vocab_size, BATCH_SIZE, EMB_DIM, HIDDEN_DIM, SEQ_LENGTH, START_TOKEN)
 
+        # target_params's size: [15 * 5000 * 32]
+        target_params = pickle.load(open('./save/target_params_py3.pkl', 'rb'))
+        # The oracle model
+        target_lstm = TARGET_LSTM(5000, BATCH_SIZE, EMB_DIM, HIDDEN_DIM, seq_len, 0, target_params)
 
-    # target_params's size: [15 * 5000 * 32]
-    target_params = pickle.load(open('./save/target_params_py3.pkl', 'rb'))
-    # The oracle model
-    target_lstm = TARGET_LSTM(5000, BATCH_SIZE, EMB_DIM, HIDDEN_DIM, 20, 0, target_params)
+        discriminator = Discriminator(sequence_length=seq_len, num_classes=2, vocab_size=vocab_size,
+                                      embedding_size=dis_embedding_dim,
+                                      filter_sizes=dis_filter_sizes, num_filters=dis_num_filters,
+                                      l2_reg_lambda=dis_l2_reg_lambda)
 
-    discriminator = Discriminator(sequence_length=20, num_classes=2, vocab_size=vocab_size,
-                                  embedding_size=dis_embedding_dim,
-                                  filter_sizes=dis_filter_sizes, num_filters=dis_num_filters,
-                                  l2_reg_lambda=dis_l2_reg_lambda)
+        config = tf.ConfigProto()
+        config.gpu_options.allow_growth = True
+        sess = tf.Session(config=config)
+        sess.run(tf.global_variables_initializer())
 
-    config = tf.ConfigProto()
-    config.gpu_options.allow_growth = True
-    sess = tf.Session(config=config)
-    sess.run(tf.global_variables_initializer())
+        generate_samples_from_target(sess, target_lstm, BATCH_SIZE, generated_num, positive_file)
+        gen_data_loader.create_batches(positive_file)
 
-    generate_samples_from_target(sess, target_lstm, BATCH_SIZE, generated_num, positive_file)
-    gen_data_loader.create_batches(positive_file)
+        # print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+        #
+        # likelihood_data_loader.create_batches(positive_file)
+        # for i in range(100):
+        #     test_loss = target_loss(sess, target_lstm, likelihood_data_loader)
+        #     print('my step ', i, 'test_loss ', test_loss)
+        #     input("next:")
+        # input("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
 
-    # print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-    #
-    # likelihood_data_loader.create_batches(positive_file)
-    # for i in range(100):
-    #     test_loss = target_loss(sess, target_lstm, likelihood_data_loader)
-    #     print('my step ', i, 'test_loss ', test_loss)
-    #     input("next:")
-    # input("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+        log = open('save/experiment-log' + str(seq_len) + '.txt', 'w')
+        #  pre-train generator
+        print('Start pre-training...')
+        log.write('pre-training...\n')
+        ans_file = open("learning_cure.txt", 'w')
+        epochs = 30 if seq_len==18 else 20
+        for epoch in range(epochs):  # 120
+            loss = pre_train_epoch(sess, generator, gen_data_loader)
+            if epoch % 1 == 0:
+                generate_samples(sess, generator, BATCH_SIZE, generated_num, eval_file)
+                likelihood_data_loader.create_batches(eval_file)
+                test_loss = target_loss(sess, target_lstm, likelihood_data_loader)
+                print('pre-train epoch ', epoch, 'test_loss ', test_loss)
+                buffer = 'epoch:\t' + str(epoch) + '\tnll:\t' + str(test_loss) + '\n'
+                log.write(buffer)
+                ans_file.write("%s\n" % str(test_loss))
 
-    log = open('save/experiment-log.txt', 'w')
-    #  pre-train generator
-    print('Start pre-training...')
-    log.write('pre-training...\n')
-    ans_file = open("learning_cure.txt", 'w')
-    for epoch in range(120):  # 120
-        loss = pre_train_epoch(sess, generator, gen_data_loader)
-        if epoch % 1 == 0:
-            generate_samples(sess, generator, BATCH_SIZE, generated_num, eval_file)
-            likelihood_data_loader.create_batches(eval_file)
-            test_loss = target_loss(sess, target_lstm, likelihood_data_loader)
-            print('pre-train epoch ', epoch, 'test_loss ', test_loss)
-            buffer = 'epoch:\t' + str(epoch) + '\tnll:\t' + str(test_loss) + '\n'
-            log.write(buffer)
-            ans_file.write("%s\n" % str(test_loss))
-
-    buffer = 'Start pre-training discriminator...'
-    print(buffer)
-    log.write(buffer)
-    for _ in range(10):   # 10
-        generate_samples(sess, generator, BATCH_SIZE, generated_num, negative_file)
-        dis_data_loader.load_train_data(positive_file, negative_file)
-        for _ in range(3):
-            dis_data_loader.reset_pointer()
-            for it in range(dis_data_loader.num_batch):
-                x_batch, y_batch = dis_data_loader.next_batch()
-                feed = {
-                    discriminator.input_x: x_batch,
-                    discriminator.input_y: y_batch,
-                    discriminator.dropout_keep_prob: dis_dropout_keep_prob,
-                }
-                d_loss, d_acc, _ = sess.run([discriminator.loss, discriminator.accuracy, discriminator.train_op], feed)
-        buffer = "discriminator loss %f acc %f\n" % (d_loss, d_acc)
+        buffer = 'Start pre-training discriminator...'
         print(buffer)
-
         log.write(buffer)
-    ans_file.write("==========\n")
-    print("Start Adversarial Training...")
-    log.write('adversarial training...')
-    for total_batch in range(TOTAL_BATCH):
-        # Train the generator
-        for it in range(1):
-            samples = generator.generate(sess)
-            rewards = generator.get_reward(sess, samples, 16, discriminator, START_TOKEN)
-            a = str(samples[0])
-            b = str(rewards[0])
-            buffer = "%s\n%s\n\n" % (a, b)
-            # print(buffer)
-            log.write(buffer)
-            rewards_loss = generator.update_with_rewards(sess, samples, rewards, START_TOKEN)
-
-            # good rewards
-            # good_samples = gen_data_loader.next_batch()
-            # rewards = np.array([[1.0] * SEQ_LENGTH] * BATCH_SIZE)
-            # a = str(good_samples[0])
-            # b = str(rewards[0])
-            # buffer = "%s\n%s\n\n" % (a, b)
-            # print(buffer)
-            # log.write(buffer)
-            # rewards_loss = generator.update_with_rewards(sess, good_samples, rewards, START_TOKEN)
-
-            # little1 good reward
-            # litter1_samples = gen_data_loader.next_batch()
-            # rewards = generator.get_reward(sess, litter1_samples, 16, discriminator, START_TOKEN)
-            # a = str(little1 good reward[0])
-            # b = str(rewards[0])
-            # buffer = "%s\n%s\n\n" % (a, b)
-            # print(buffer)
-            # log.write(buffer)
-            # rewards_loss = generator.update_with_rewards(sess, litter1_samples, rewards, START_TOKEN)
-
-
-        # Test
-        if total_batch % 1 == 0 or total_batch == TOTAL_BATCH - 1:
-            generate_samples(sess, generator, BATCH_SIZE, generated_num, eval_file)
-            likelihood_data_loader.create_batches(eval_file)
-            test_loss = target_loss(sess, target_lstm, likelihood_data_loader)
-            buffer = 'reward-train epoch %s train loss %s test_loss %s\n' % (str(total_batch), str(rewards_loss), str(test_loss))
-            print(buffer)
-            log.write(buffer)
-            ans_file.write("%s\n" % str(test_loss))
-
-        # Train the discriminator
-        for _ in range(1):
+        for _ in range(5):   # 10
             generate_samples(sess, generator, BATCH_SIZE, generated_num, negative_file)
             dis_data_loader.load_train_data(positive_file, negative_file)
             for _ in range(3):
@@ -236,10 +173,79 @@ def main():
                         discriminator.dropout_keep_prob: dis_dropout_keep_prob,
                     }
                     d_loss, d_acc, _ = sess.run([discriminator.loss, discriminator.accuracy, discriminator.train_op], feed)
-            if total_batch % 5 == 0 or total_batch == TOTAL_BATCH - 1:
-                buffer = "discriminator loss %f acc %f\n" % (d_loss, d_acc)
+            buffer = "discriminator loss %f acc %f\n" % (d_loss, d_acc)
+            print(buffer)
+
+            log.write(buffer)
+        ans_file.write("==========\n")
+        print("Start Adversarial Training...")
+        log.write('adversarial training...')
+        for total_batch in range(TOTAL_BATCH):
+            # Train the generator
+            for it in range(1):
+                samples = generator.generate(sess)
+                rewards = generator.get_reward(sess, samples, 16, discriminator, START_TOKEN)
+                a = str(samples[0])
+                b = str(rewards[0])
+                buffer = "%s\n%s\n\n" % (a, b)
+                # print(buffer)
+                log.write(buffer)
+                rewards_loss = generator.update_with_rewards(sess, samples, rewards, START_TOKEN)
+
+                # good rewards
+                # good_samples = gen_data_loader.next_batch()
+                # rewards = np.array([[1.0] * SEQ_LENGTH] * BATCH_SIZE)
+                # a = str(good_samples[0])
+                # b = str(rewards[0])
+                # buffer = "%s\n%s\n\n" % (a, b)
+                # print(buffer)
+                # log.write(buffer)
+                # rewards_loss = generator.update_with_rewards(sess, good_samples, rewards, START_TOKEN)
+
+                # little1 good reward
+                # litter1_samples = gen_data_loader.next_batch()
+                # rewards = generator.get_reward(sess, litter1_samples, 16, discriminator, START_TOKEN)
+                # a = str(little1 good reward[0])
+                # b = str(rewards[0])
+                # buffer = "%s\n%s\n\n" % (a, b)
+                # print(buffer)
+                # log.write(buffer)
+                # rewards_loss = generator.update_with_rewards(sess, litter1_samples, rewards, START_TOKEN)
+
+
+            # Test
+            if total_batch % 1 == 0 or total_batch == TOTAL_BATCH - 1:
+                generate_samples(sess, generator, BATCH_SIZE, generated_num, eval_file)
+                likelihood_data_loader.create_batches(eval_file)
+                test_loss = target_loss(sess, target_lstm, likelihood_data_loader)
+                buffer = 'reward-train epoch %s train loss %s test_loss %s\n' % (str(total_batch), str(rewards_loss), str(test_loss))
                 print(buffer)
                 log.write(buffer)
+                ans_file.write("%s\n" % str(test_loss))
+                generator.save_model(sess, seq_len)
+
+            # Train the discriminator
+            for _ in range(1):
+                generate_samples(sess, generator, BATCH_SIZE, generated_num, negative_file)
+                dis_data_loader.load_train_data(positive_file, negative_file)
+                for _ in range(3):
+                    dis_data_loader.reset_pointer()
+                    for it in range(dis_data_loader.num_batch):
+                        x_batch, y_batch = dis_data_loader.next_batch()
+                        feed = {
+                            discriminator.input_x: x_batch,
+                            discriminator.input_y: y_batch,
+                            discriminator.dropout_keep_prob: dis_dropout_keep_prob,
+                        }
+                        d_loss, d_acc, _ = sess.run([discriminator.loss, discriminator.accuracy, discriminator.train_op], feed)
+                if total_batch % 5 == 0 or total_batch == TOTAL_BATCH - 1:
+                    buffer = "discriminator loss %f acc %f\n" % (d_loss, d_acc)
+                    print(buffer)
+                    log.write(buffer)
+                    discriminator.save_model(sess, seq_len)
+        seq_len += 1
+
+
 
 
 if __name__ == '__main__':

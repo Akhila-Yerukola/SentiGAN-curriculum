@@ -140,3 +140,8 @@ class Discriminator(object):
         d_optimizer = tf.train.AdamOptimizer(1e-4)
         grads_and_vars = d_optimizer.compute_gradients(self.loss, self.params, aggregation_method=2)
         self.train_op = d_optimizer.apply_gradients(grads_and_vars)
+        self.saver = tf.train.Saver(tf.global_variables())
+
+    def save_model(self, sess, i):
+        self.saver.save(sess, 'save/ckpt/discriminator' + str(i) + '.ckpt')
+        print("save discriminator model success!")

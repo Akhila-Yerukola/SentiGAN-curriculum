@@ -171,6 +171,10 @@ class Generator(object):
 
         self.saver = tf.train.Saver(tf.global_variables())
 
+    def save_model(self, sess, i):
+        self.saver.save(sess, 'save/ckpt/generator' + str(i) + '.ckpt')
+        print("save generator model success!")
+
     def pretrain_step(self, sess, x, go_id):
         input_x = self.pad_input_data(x, go_id)
         target_x = x  # self.pad_target_data(x)
