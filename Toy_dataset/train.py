@@ -34,17 +34,15 @@ dis_batch_size = 64
 #########################################################################################
 #  Basic Training Parameters
 #########################################################################################
-TOTAL_BATCH = 50
-positive_file = 'save/real_data.txt'
-negative_file = 'save/generator_sample.txt'
-eval_file = 'save/eval_file.txt'
+TOTAL_BATCH = 50 
+positive_file = 'save_2/real_data.txt'
+negative_file = 'save_2/generator_sample.txt'
+eval_file = 'save_2/eval_file.txt'
 generated_num = 10000
 vocab_size = 5000
 START_TOKEN = 0
 
 
-import pdb
-pdb.set_trace()
 
 def generate_samples_from_target(sess, trainable_model, batch_size, generated_num, output_file):
     # Generate Target Samples
@@ -91,6 +89,8 @@ def pre_train_epoch(sess, trainable_model, data_loader):
 
     for it in range(data_loader.num_batch):
         batch = data_loader.next_batch()
+        #import pdb
+        #pdb.set_trace()
         _, g_loss = trainable_model.pretrain_step(sess, batch, START_TOKEN)
         supervised_g_losses.append(g_loss)
 
@@ -118,7 +118,7 @@ def main():
 
     while seq_len <= SEQ_LENGTH:
         print("Current sequence length is " + str(seq_len))
-        generator = Generator(vocab_size, BATCH_SIZE, EMB_DIM, HIDDEN_DIM, SEQ_LENGTH, START_TOKEN, seq_len) if generator is None else generator
+        generator = Generator(vocab_size, BATCH_SIZE, EMB_DIM, HIDDEN_DIM, SEQ_LENGTH, START_TOKEN, true_seq_len=seq_len) if generator is None else generator
         generator.true_seq_len = seq_len
 
         # target_params's size: [15 * 5000 * 32]
@@ -148,12 +148,13 @@ def main():
         #     input("next:")
         # input("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
 
-        log = open('save/experiment-log' + str(seq_len) + '.txt', 'w')
+        log = open('save_2/experiment-log' + str(seq_len) + '.txt', 'w')
         #  pre-train generator
         print('Start pre-training...')
         log.write('pre-training...\n')
-        ans_file = open("learning_cure.txt", 'w')
-        epochs = 40
+        ans_file = open('save_2/learning_cure' + str(seq_len) + '.txt', 'w')
+        epochs = 80 if seq_len==18 else 40
+        ans_file.write("-------- %s \n" % seq_len)
         for epoch in range(epochs):  # 120
             loss = pre_train_epoch(sess, generator, gen_data_loader)
             if epoch % 1 == 0:
@@ -168,7 +169,7 @@ def main():
         buffer = 'Start pre-training discriminator...'
         print(buffer)
         log.write(buffer)
-        for _ in range(2):   # 10
+        for _ in range(6):   # 10
             generate_samples(sess, generator, BATCH_SIZE, generated_num, negative_file)
             dis_data_loader.load_train_data(positive_file, negative_file, seq_len)
             for _ in range(3):
@@ -188,6 +189,7 @@ def main():
         ans_file.write("==========\n")
         print("Start Adversarial Training...")
         log.write('adversarial training...')
+        TOTAL_BATCH = 40 if seq_len ==18 else 20 
         for total_batch in range(TOTAL_BATCH):
             # Train the generator
             for it in range(1):
@@ -222,7 +224,7 @@ def main():
 
 
             # Test
-            if total_batch % 5 == 0 or total_batch == TOTAL_BATCH - 1:
+            if total_batch % 1 == 0 or total_batch == TOTAL_BATCH - 1:
                 generate_samples(sess, generator, BATCH_SIZE, generated_num, eval_file)
                 likelihood_data_loader.create_batches(eval_file, seq_len)
                 test_loss = target_loss(sess, target_lstm, likelihood_data_loader)
@@ -230,7 +232,8 @@ def main():
                 print(buffer)
                 log.write(buffer)
                 ans_file.write("%s\n" % str(test_loss))
-                generator.save_model(sess, seq_len)
+                
+            if total_batch % 20 == 0 or total_batch == TOTAL_BATCH - 1: generator.save_model(sess, seq_len)
 
             # Train the discriminator
             for _ in range(1):
@@ -250,7 +253,7 @@ def main():
                     buffer = "discriminator loss %f acc %f\n" % (d_loss, d_acc)
                     print(buffer)
                     log.write(buffer)
-                    discriminator.save_model(sess, seq_len)
+                if total_batch %20 == 0 or total_batch == TOTAL_BATCH - 1: discriminator.save_model(sess, seq_len)
         seq_len += 1
 
 
