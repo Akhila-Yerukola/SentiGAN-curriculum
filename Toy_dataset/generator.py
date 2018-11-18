@@ -7,8 +7,9 @@ import numpy as np
 class Generator(object):
     def __init__(self, num_emb, batch_size, emb_dim, num_units,
                  sequence_length, start_token,
-                 learning_rate=0.01, reward_gamma=0.95,
+                 learning_rate=0.01, reward_gamma=0.95, true_seq_len=18
                  ):
+        self.true_seq_len = true_seq_len
         self.num_emb = num_emb
         self.batch_size = batch_size
         self.emb_dim = emb_dim
@@ -77,10 +78,10 @@ class Generator(object):
             # self.pretrain_token_id = tf.cast(tf.argmax(self.g_predictions, axis=-1), tf.int32)
 
             self.pretrain_loss = - tf.reduce_sum(
-                tf.one_hot(tf.to_int32(tf.reshape(self.targets, [-1])), self.num_emb, 1.0, 0.0) * tf.log(
-                    tf.clip_by_value(tf.reshape(self.g_predictions, [-1, self.num_emb]), 1e-20, 1.0)
+                tf.one_hot(tf.to_int32(tf.reshape(self.targets[:, :self.true_seq_len], [-1])), self.num_emb, 1.0, 0.0) * tf.log(
+                    tf.clip_by_value(tf.reshape(self.g_predictions[:, :self.true_seq_len, :], [-1, self.num_emb]), 1e-20, 1.0)
                 )
-            ) / (self.sequence_length * self.batch_size)
+            ) / (self.true_seq_len * self.batch_size)
 
             self.global_step = tf.Variable(0, trainable=False)
             optimizer = tf.train.AdamOptimizer(self.learning_rate)
@@ -235,7 +236,7 @@ class Generator(object):
         rewards = []
 
         for i in range(rollout_num):
-            for given_num in range(1, 20):
+            for given_num in range(1, self.true_seq_len):
 
                 rollout_next_id = []
                 for _item in x:
@@ -281,12 +282,13 @@ class Generator(object):
             if i == 0:
                 rewards.append(ypred)
             else:
-                rewards[19] += ypred
+                rewards[self.true_seq_len - 1] += ypred
             # print(len(rewards))
             # print(len(rewards[0]))
             # print(rewards[0])
             # input()
-
+        for count in range(20 - self.true_seq_len):
+            rewards.append([0.] * self.batch_size)
         rewards = np.transpose(np.array(rewards)) / (1.0 * rollout_num)  # batch_size x seq_length
         return rewards
 

@@ -3,8 +3,9 @@ from tensorflow.python.ops import tensor_array_ops, control_flow_ops
 
 
 class TARGET_LSTM(object):
-    def __init__(self, num_emb, batch_size, emb_dim, hidden_dim, sequence_length, start_token, params):
+    def __init__(self, num_emb, batch_size, emb_dim, hidden_dim, sequence_length, start_token, params, true_seq_len):
         self.num_emb = num_emb
+        self.true_seq_len = true_seq_len
         self.batch_size = batch_size
         self.emb_dim = emb_dim
         self.hidden_dim = hidden_dim
@@ -90,16 +91,16 @@ class TARGET_LSTM(object):
 
         # pretraining loss
         self.pretrain_loss = -tf.reduce_sum(
-            tf.one_hot(tf.to_int32(tf.reshape(self.x, [-1])), self.num_emb, 1.0, 0.0) * tf.log(
-                tf.reshape(self.g_predictions, [-1, self.num_emb]))) / (self.sequence_length * self.batch_size)
+            tf.one_hot(tf.to_int32(tf.reshape(self.x[:, :self.true_seq_len], [-1])), self.num_emb, 1.0, 0.0) * tf.log(
+                tf.reshape(self.g_predictions[:, :self.true_seq_len, :], [-1, self.num_emb]))) / (self.true_seq_len * self.batch_size)
 
         # no use, can be delete
         self.out_loss = tf.reduce_sum(
             tf.reshape(
                 -tf.reduce_sum(
-                    tf.one_hot(tf.to_int32(tf.reshape(self.x, [-1])), self.num_emb, 1.0, 0.0) * tf.log(
-                        tf.reshape(self.g_predictions, [-1, self.num_emb])), 1
-                ), [-1, self.sequence_length]
+                    tf.one_hot(tf.to_int32(tf.reshape(self.x[:, :self.true_seq_len], [-1])), self.num_emb, 1.0, 0.0) * tf.log(
+                        tf.reshape(self.g_predictions[: , :self.true_seq_len, :], [-1, self.num_emb])), 1
+                ), [-1, self.true_seq_len]
             ), 1
         )  # batch_size
 

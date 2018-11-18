@@ -34,7 +34,7 @@ dis_batch_size = 64
 #########################################################################################
 #  Basic Training Parameters
 #########################################################################################
-TOTAL_BATCH = 350
+TOTAL_BATCH = 50
 positive_file = 'save/real_data.txt'
 negative_file = 'save/generator_sample.txt'
 eval_file = 'save/eval_file.txt'
@@ -42,6 +42,9 @@ generated_num = 10000
 vocab_size = 5000
 START_TOKEN = 0
 
+
+import pdb
+pdb.set_trace()
 
 def generate_samples_from_target(sess, trainable_model, batch_size, generated_num, output_file):
     # Generate Target Samples
@@ -115,14 +118,14 @@ def main():
 
     while seq_len <= SEQ_LENGTH:
         print("Current sequence length is " + str(seq_len))
-        generator = Generator(vocab_size, BATCH_SIZE, EMB_DIM, HIDDEN_DIM, SEQ_LENGTH, START_TOKEN) if generator is None else generator
-
+        generator = Generator(vocab_size, BATCH_SIZE, EMB_DIM, HIDDEN_DIM, SEQ_LENGTH, START_TOKEN, seq_len) if generator is None else generator
+        generator.true_seq_len = seq_len
 
         # target_params's size: [15 * 5000 * 32]
         target_params = pickle.load(open('./save/target_params_py3.pkl', 'rb'))
         # The oracle model
-        target_lstm = TARGET_LSTM(5000, BATCH_SIZE, EMB_DIM, HIDDEN_DIM, SEQ_LENGTH, 0, target_params) if target_lstm is None else target_lstm
-
+        target_lstm = TARGET_LSTM(5000, BATCH_SIZE, EMB_DIM, HIDDEN_DIM, SEQ_LENGTH, 0, target_params, seq_len) if target_lstm is None else target_lstm
+        target_lstm.true_seq_len = seq_len
         discriminator = Discriminator(sequence_length=SEQ_LENGTH, num_classes=2, vocab_size=vocab_size,
                                       embedding_size=dis_embedding_dim,
                                       filter_sizes=dis_filter_sizes, num_filters=dis_num_filters,
@@ -150,7 +153,7 @@ def main():
         print('Start pre-training...')
         log.write('pre-training...\n')
         ans_file = open("learning_cure.txt", 'w')
-        epochs = 15
+        epochs = 40
         for epoch in range(epochs):  # 120
             loss = pre_train_epoch(sess, generator, gen_data_loader)
             if epoch % 1 == 0:
@@ -165,7 +168,7 @@ def main():
         buffer = 'Start pre-training discriminator...'
         print(buffer)
         log.write(buffer)
-        for _ in range(4):   # 10
+        for _ in range(2):   # 10
             generate_samples(sess, generator, BATCH_SIZE, generated_num, negative_file)
             dis_data_loader.load_train_data(positive_file, negative_file, seq_len)
             for _ in range(3):
@@ -219,7 +222,7 @@ def main():
 
 
             # Test
-            if total_batch % 1 == 0 or total_batch == TOTAL_BATCH - 1:
+            if total_batch % 5 == 0 or total_batch == TOTAL_BATCH - 1:
                 generate_samples(sess, generator, BATCH_SIZE, generated_num, eval_file)
                 likelihood_data_loader.create_batches(eval_file, seq_len)
                 test_loss = target_loss(sess, target_lstm, likelihood_data_loader)

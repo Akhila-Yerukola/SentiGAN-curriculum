@@ -50,7 +50,7 @@ class Dis_Data_loader():
                 line = line.strip()
                 line = line.split()
                 parse_line = [int(x) for x in line]
-                positive_examples.append(parse_line)
+                positive_examples.append(parse_line[:seq_len] + [0] * (20 - seq_len))
         with open(negative_file)as fin:
             for line in fin:
                 line = line.strip()
