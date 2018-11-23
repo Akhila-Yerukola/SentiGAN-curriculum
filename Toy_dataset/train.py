@@ -24,7 +24,7 @@ BATCH_SIZE = 64
 #  Discriminator  Hyper-parameters
 #########################################################################################
 dis_embedding_dim = 64
-dis_filter_sizes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20]
+dis_filter_sizes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 19]
 dis_num_filters = [100, 200, 200, 200, 200, 100, 100, 100, 100, 100, 160, 160]
 dis_dropout_keep_prob = 0.75
 dis_l2_reg_lambda = 0.2
@@ -35,9 +35,9 @@ dis_batch_size = 64
 #  Basic Training Parameters
 #########################################################################################
 TOTAL_BATCH = 50 
-positive_file = 'save_2/real_data.txt'
-negative_file = 'save_2/generator_sample.txt'
-eval_file = 'save_2/eval_file.txt'
+positive_file = 'save_start_8/real_data.txt'
+negative_file = 'save_start_8/generator_sample.txt'
+eval_file = 'save_start_8/eval_file.txt'
 generated_num = 10000
 vocab_size = 5000
 START_TOKEN = 0
@@ -105,7 +105,7 @@ def pre_train_epoch(sess, trainable_model, data_loader):
 def main():
     random.seed(SEED)
     np.random.seed(SEED)
-    seq_len = 18
+    seq_len = 1
 
     # prepare data
     gen_data_loader = Gen_Data_loader(BATCH_SIZE)
@@ -117,7 +117,14 @@ def main():
 
 
     while seq_len <= SEQ_LENGTH:
+        log = open('save_start_8/experiment-log' + str(seq_len) + '.txt', 'w')
         print("Current sequence length is " + str(seq_len))
+        if generator is None:
+            log.write("Init generator")
+            print("Init generator")
+        else:
+            log.write("Used same generator")
+            print("Used same generator")
         generator = Generator(vocab_size, BATCH_SIZE, EMB_DIM, HIDDEN_DIM, SEQ_LENGTH, START_TOKEN, true_seq_len=seq_len) if generator is None else generator
         generator.true_seq_len = seq_len
 
@@ -148,12 +155,12 @@ def main():
         #     input("next:")
         # input("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
 
-        log = open('save_2/experiment-log' + str(seq_len) + '.txt', 'w')
+        #log = open('save_19_20/experiment-log' + str(seq_len) + '.txt', 'w')
         #  pre-train generator
         print('Start pre-training...')
         log.write('pre-training...\n')
-        ans_file = open('save_2/learning_cure' + str(seq_len) + '.txt', 'w')
-        epochs = 80 if seq_len==18 else 40
+        ans_file = open('save_start_8/learning_cure' + str(seq_len) + '.txt', 'w')
+        epochs = 100 
         ans_file.write("-------- %s \n" % seq_len)
         for epoch in range(epochs):  # 120
             loss = pre_train_epoch(sess, generator, gen_data_loader)
@@ -169,7 +176,7 @@ def main():
         buffer = 'Start pre-training discriminator...'
         print(buffer)
         log.write(buffer)
-        for _ in range(6):   # 10
+        for _ in range(8):   # 10
             generate_samples(sess, generator, BATCH_SIZE, generated_num, negative_file)
             dis_data_loader.load_train_data(positive_file, negative_file, seq_len)
             for _ in range(3):
@@ -189,7 +196,7 @@ def main():
         ans_file.write("==========\n")
         print("Start Adversarial Training...")
         log.write('adversarial training...')
-        TOTAL_BATCH = 40 if seq_len ==18 else 20 
+        TOTAL_BATCH = 350
         for total_batch in range(TOTAL_BATCH):
             # Train the generator
             for it in range(1):
