@@ -60,11 +60,12 @@ class Discriminator(object):
 
     def __init__(
             self, sequence_length, num_classes, vocab_size,
-            embedding_size, filter_sizes, num_filters, l2_reg_lambda=0.0):
+            embedding_size, filter_sizes, num_filters, l2_reg_lambda=0.0, save_model_path='save'):
         # Placeholders for input, output and dropout
         self.input_x = tf.placeholder(tf.int32, [None, sequence_length], name="input_x")
         self.input_y = tf.placeholder(tf.float32, [None, num_classes], name="input_y")
         self.dropout_keep_prob = tf.placeholder(tf.float32, name="dropout_keep_prob")
+        self.save_model_path = save_model_path
 
         # Keeping track of l2 regularization loss (optional)
         l2_loss = tf.constant(0.0)
@@ -143,5 +144,5 @@ class Discriminator(object):
         self.saver = tf.train.Saver(tf.global_variables())
 
     def save_model(self, sess, i):
-        self.saver.save(sess, 'save/ckpt/discriminator' + str(i) + '.ckpt')
+        self.saver.save(sess, self.save_model_path + '/ckpt/discriminator' + str(i) + '.ckpt')
         print("save discriminator model success!")

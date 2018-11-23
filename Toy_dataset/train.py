@@ -8,14 +8,19 @@ from generator import Generator
 from discriminator import Discriminator
 # from rollout import ROLLOUT
 
-
-arser = argparse.ArgumentParser(description='SentiGAN with curriculum training')
+parser = argparse.ArgumentParser(description='SentiGAN with curriculum training')
 parser.add_argument('--seq_len', type=int, default=1,
                     help='sequence length to start curriculum training from')
 parser.add_argument('--max_seq_len', type=int, default=20,
                     help='sequence length to end curriculum training at')
 parser.add_argument('--save', type=str, default='save',
                     help='location of save the model and logs')
+parser.add_argument('--disc_pre_epoch', type=int, default=4,
+                    help='discriminator pre train epochs')
+parser.add_argument('--gen_pre_epoch', type=int, default=100,
+                    help='discriminator pre train epochs')
+parser.add_argument('--adversarial_epoch', type=int, default=350,
+                    help='adversarial training epochs')
 args = parser.parse_args()
 
 #########################################################################################
@@ -114,7 +119,7 @@ def pre_train_epoch(sess, trainable_model, data_loader):
 def main():
     random.seed(SEED)
     np.random.seed(SEED)
-    seq_len = 1
+    seq_len = args.seq_len
 
     # prepare data
     gen_data_loader = Gen_Data_loader(BATCH_SIZE, SEQ_LENGTH)
@@ -134,7 +139,9 @@ def main():
         else:
             log.write("Used same generator")
             print("Used same generator")
-        generator = Generator(num_emb=vocab_size, batch_size=BATCH_SIZE, emb_dim=EMB_DIM, num_units=HIDDEN_DIM, sequence_length=SEQ_LENGTH, start_token=START_TOKEN, true_seq_len=seq_len) if generator is None else generator
+        generator = Generator(num_emb=vocab_size, batch_size=BATCH_SIZE, emb_dim=EMB_DIM, 
+            num_units=HIDDEN_DIM, sequence_length=SEQ_LENGTH, start_token=START_TOKEN, 
+            true_seq_len=seq_len, save_model_path = args.save) if generator is None else generator
         generator.true_seq_len = seq_len
 
         # target_params's size: [15 * 5000 * 32]
@@ -145,7 +152,7 @@ def main():
         discriminator = Discriminator(sequence_length=SEQ_LENGTH, num_classes=2, vocab_size=vocab_size,
                                       embedding_size=dis_embedding_dim,
                                       filter_sizes=dis_filter_sizes, num_filters=dis_num_filters,
-                                      l2_reg_lambda=dis_l2_reg_lambda) if discriminator is None else discriminator
+                                      l2_reg_lambda=dis_l2_reg_lambda, save_model_path=args.save) if discriminator is None else discriminator
 
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = True
@@ -169,7 +176,7 @@ def main():
         print('Start pre-training...')
         log.write('pre-training...\n')
         ans_file = open(args.save + '/learning_cure' + str(seq_len) + '.txt', 'w')
-        epochs = 100 
+        epochs = args.gen_pre_epoch 
         ans_file.write("-------- %s \n" % seq_len)
         for epoch in range(epochs):  # 120
             loss = pre_train_epoch(sess, generator, gen_data_loader)
@@ -185,7 +192,7 @@ def main():
         buffer = 'Start pre-training discriminator...'
         print(buffer)
         log.write(buffer)
-        for _ in range(8):   # 10
+        for _ in range(args.disc_pre_epoch):   # 10
             generate_samples(sess, generator, BATCH_SIZE, generated_num, negative_file)
             dis_data_loader.load_train_data(positive_file, negative_file, seq_len)
             for _ in range(3):
@@ -205,7 +212,7 @@ def main():
         ans_file.write("==========\n")
         print("Start Adversarial Training...")
         log.write('adversarial training...')
-        TOTAL_BATCH = 350
+        TOTAL_BATCH = args.adversarial_epoch
         for total_batch in range(TOTAL_BATCH):
             # Train the generator
             for it in range(1):

@@ -7,7 +7,7 @@ import numpy as np
 class Generator(object):
     def __init__(self, num_emb, batch_size, emb_dim, num_units,
                  sequence_length, start_token,
-                 learning_rate=0.01, reward_gamma=0.95, true_seq_len=18
+                 learning_rate=0.01, reward_gamma=0.95, true_seq_len=18, save_model_path='save'
                  ):
         self.true_seq_len = true_seq_len
         self.num_emb = num_emb
@@ -16,6 +16,7 @@ class Generator(object):
         self.num_units = num_units
         self.sequence_length = sequence_length
         self.start_token = start_token
+        self.save_model_path = save_model_path
         # self.end_token = end_token
         self.learning_rate = tf.Variable(float(learning_rate), trainable=False)
         self.reward_gamma = reward_gamma
@@ -173,7 +174,7 @@ class Generator(object):
         self.saver = tf.train.Saver(tf.global_variables())
 
     def save_model(self, sess, i):
-        self.saver.save(sess, 'save/ckpt/generator' + str(i) + '.ckpt')
+        self.saver.save(sess, self.save_model_path + '/ckpt/generator' + str(i) + '.ckpt')
         print("save generator model success!")
 
     def pretrain_step(self, sess, x, go_id):
