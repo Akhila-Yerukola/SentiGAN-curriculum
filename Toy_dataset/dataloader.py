@@ -2,9 +2,10 @@ import numpy as np
 
 
 class Gen_Data_loader():
-    def __init__(self, batch_size):
+    def __init__(self, batch_size, sequence_length):
         self.batch_size = batch_size
         self.token_stream = []
+        self.sequence_length = sequence_length
 
     def create_batches(self, data_file, seq_len):
         """make self.token_stream into a integer stream."""
@@ -15,8 +16,8 @@ class Gen_Data_loader():
                 line = line.split()
                 parse_line = [int(x) for x in line]
                 #print(len(parse_line))
-                if len(parse_line) == 20:
-                    self.token_stream.append(parse_line[:seq_len] + [0] * (20 - seq_len))
+                if len(parse_line) == self.sequence_length:
+                    self.token_stream.append(parse_line[:seq_len] + [0] * (self.sequence_length - seq_len))
         self.num_batch = int(len(self.token_stream) / self.batch_size)
         # cut the taken_stream's length exactly equal to num_batch * batch_size
         self.token_stream = self.token_stream[:self.num_batch * self.batch_size]
@@ -36,10 +37,12 @@ class Gen_Data_loader():
 
 
 class Dis_Data_loader():
-    def __init__(self, batch_size):
+    def __init__(self, batch_size, sequence_length):
         self.batch_size = batch_size
         self.sentences = np.array([])
         self.labels = np.array([])
+        self.sequence_length = sequence_length
+
 
     def load_train_data(self, positive_file, negative_file, seq_len):
         # Load data
@@ -50,15 +53,15 @@ class Dis_Data_loader():
                 line = line.strip()
                 line = line.split()
                 parse_line = [int(x) for x in line]
-                positive_examples.append(parse_line[:seq_len] + [0] * (20 - seq_len))
+                positive_examples.append(parse_line[:seq_len] + [0] * (self.sequence_length - seq_len))
         with open(negative_file)as fin:
             for line in fin:
                 line = line.strip()
                 line = line.split()
                 parse_line = [int(x) for x in line]
                 # ???: why parse_line == 20
-                if len(parse_line) == 20:
-                    negative_examples.append(parse_line[:seq_len] + [0] * (20 - seq_len))
+                if len(parse_line) == self.sequence_length:
+                    negative_examples.append(parse_line[:seq_len] + [0] * (self.sequence_length - seq_len))
         self.sentences = np.array(positive_examples + negative_examples)
 
         # Generate labels

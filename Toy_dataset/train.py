@@ -9,12 +9,21 @@ from discriminator import Discriminator
 # from rollout import ROLLOUT
 
 
+arser = argparse.ArgumentParser(description='SentiGAN with curriculum training')
+parser.add_argument('--seq_len', type=int, default=1,
+                    help='sequence length to start curriculum training from')
+parser.add_argument('--max_seq_len', type=int, default=20,
+                    help='sequence length to end curriculum training at')
+parser.add_argument('--save', type=str, default='save',
+                    help='location of save the model and logs')
+args = parser.parse_args()
+
 #########################################################################################
 #  Generator  Hyper-parameters
 ######################################################################################
 EMB_DIM = 32 # embedding dimension
 HIDDEN_DIM = 32 # hidden state dimension of lstm cell
-SEQ_LENGTH = 20 # sequence length
+SEQ_LENGTH = args.max_seq_len # sequence length
 
 SEED = 88
 BATCH_SIZE = 64
@@ -35,9 +44,9 @@ dis_batch_size = 64
 #  Basic Training Parameters
 #########################################################################################
 TOTAL_BATCH = 50 
-positive_file = 'save_start_8/real_data.txt'
-negative_file = 'save_start_8/generator_sample.txt'
-eval_file = 'save_start_8/eval_file.txt'
+positive_file = args.save + '/real_data.txt'
+negative_file = args.save + '/generator_sample.txt'
+eval_file = args.save + '/eval_file.txt'
 generated_num = 10000
 vocab_size = 5000
 START_TOKEN = 0
@@ -108,16 +117,16 @@ def main():
     seq_len = 1
 
     # prepare data
-    gen_data_loader = Gen_Data_loader(BATCH_SIZE)
-    likelihood_data_loader = Gen_Data_loader(BATCH_SIZE)  # For testing
-    dis_data_loader = Dis_Data_loader(BATCH_SIZE)
+    gen_data_loader = Gen_Data_loader(BATCH_SIZE, SEQ_LENGTH)
+    likelihood_data_loader = Gen_Data_loader(BATCH_SIZE, SEQ_LENGTH)  # For testing
+    dis_data_loader = Dis_Data_loader(BATCH_SIZE, SEQ_LENGTH)
     generator = None
     discriminator = None
     target_lstm = None
 
 
     while seq_len <= SEQ_LENGTH:
-        log = open('save_start_8/experiment-log' + str(seq_len) + '.txt', 'w')
+        log = open(args.save + '/experiment-log' + str(seq_len) + '.txt', 'w')
         print("Current sequence length is " + str(seq_len))
         if generator is None:
             log.write("Init generator")
@@ -125,7 +134,7 @@ def main():
         else:
             log.write("Used same generator")
             print("Used same generator")
-        generator = Generator(vocab_size, BATCH_SIZE, EMB_DIM, HIDDEN_DIM, SEQ_LENGTH, START_TOKEN, true_seq_len=seq_len) if generator is None else generator
+        generator = Generator(num_emb=vocab_size, batch_size=BATCH_SIZE, emb_dim=EMB_DIM, num_units=HIDDEN_DIM, sequence_length=SEQ_LENGTH, start_token=START_TOKEN, true_seq_len=seq_len) if generator is None else generator
         generator.true_seq_len = seq_len
 
         # target_params's size: [15 * 5000 * 32]
@@ -159,7 +168,7 @@ def main():
         #  pre-train generator
         print('Start pre-training...')
         log.write('pre-training...\n')
-        ans_file = open('save_start_8/learning_cure' + str(seq_len) + '.txt', 'w')
+        ans_file = open(args.save + '/learning_cure' + str(seq_len) + '.txt', 'w')
         epochs = 100 
         ans_file.write("-------- %s \n" % seq_len)
         for epoch in range(epochs):  # 120

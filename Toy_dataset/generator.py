@@ -202,9 +202,9 @@ class Generator(object):
     def generate(self, sess):
         outputs = sess.run(self.out_tokens)
         # outputs = self.delete_output_data(outputs, self.sequence_length)
-        if len(outputs[0]) != 20:
+        if len(outputs[0]) != self.sequence_length:
             print("warning! : outputs length:%d" % len(outputs[0]))
-            outputs = np.concatenate((outputs, np.array([[5000] * (20 - len(outputs[0]))] * self.batch_size)), axis=1)
+            outputs = np.concatenate((outputs, np.array([[5000] * (self.sequence_length - len(outputs[0]))] * self.batch_size)), axis=1)
         return outputs
 
     def init_matrix(self, shape):
@@ -287,7 +287,7 @@ class Generator(object):
             # print(len(rewards[0]))
             # print(rewards[0])
             # input()
-        for count in range(20 - self.true_seq_len):
+        for count in range(self.sequence_length - self.true_seq_len):
             rewards.append([0.] * self.batch_size)
         rewards = np.transpose(np.array(rewards)) / (1.0 * rollout_num)  # batch_size x seq_length
         return rewards
