@@ -6,6 +6,7 @@ import pickle
 from target_lstm import TARGET_LSTM
 from generator import Generator
 from discriminator import Discriminator
+import argparse
 # from rollout import ROLLOUT
 
 parser = argparse.ArgumentParser(description='SentiGAN with curriculum training')
@@ -48,7 +49,10 @@ dis_batch_size = 64
 #########################################################################################
 #  Basic Training Parameters
 #########################################################################################
-TOTAL_BATCH = 50 
+TOTAL_BATCH = 50
+import os
+if not os.path.exists(args.save):
+    os.makedirs(args.save) 
 positive_file = args.save + '/real_data.txt'
 negative_file = args.save + '/generator_sample.txt'
 eval_file = args.save + '/eval_file.txt'
@@ -133,6 +137,8 @@ def main():
     while seq_len <= SEQ_LENGTH:
         log = open(args.save + '/experiment-log' + str(seq_len) + '.txt', 'w')
         print("Current sequence length is " + str(seq_len))
+        print('Args:', args)
+        log.write(str(args))
         if generator is None:
             log.write("Init generator")
             print("Init generator")
@@ -177,7 +183,7 @@ def main():
         log.write('pre-training...\n')
         ans_file = open(args.save + '/learning_cure' + str(seq_len) + '.txt', 'w')
         epochs = args.gen_pre_epoch 
-        ans_file.write("-------- %s \n" % seq_len)
+        #ans_file.write("-------- %s \n" % seq_len)
         for epoch in range(epochs):  # 120
             loss = pre_train_epoch(sess, generator, gen_data_loader)
             if epoch % 1 == 0:
