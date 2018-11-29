@@ -22,6 +22,8 @@ parser.add_argument('--gen_pre_epoch', type=int, default=100,
                     help='discriminator pre train epochs')
 parser.add_argument('--adversarial_epoch', type=int, default=350,
                     help='adversarial training epochs')
+parser.add_argument('--lbda', type=int, default=1,
+                    help='weightage of mle during adv training')
 args = parser.parse_args()
 
 #########################################################################################
@@ -147,7 +149,7 @@ def main():
             print("Used same generator")
         generator = Generator(num_emb=vocab_size, batch_size=BATCH_SIZE, emb_dim=EMB_DIM, 
             num_units=HIDDEN_DIM, sequence_length=SEQ_LENGTH, start_token=START_TOKEN, 
-            true_seq_len=seq_len, save_model_path = args.save) if generator is None else generator
+            true_seq_len=seq_len, save_model_path = args.save, lbda=args.lbda) if generator is None else generator
         generator.true_seq_len = seq_len
 
         # target_params's size: [15 * 5000 * 32]

@@ -7,9 +7,10 @@ import numpy as np
 class Generator(object):
     def __init__(self, num_emb, batch_size, emb_dim, num_units,
                  sequence_length, start_token,
-                 learning_rate=0.01, reward_gamma=0.95, true_seq_len=18, save_model_path='save'
+                 learning_rate=0.01, reward_gamma=0.95, true_seq_len=18, save_model_path='save', lbda=1
                  ):
         self.true_seq_len = true_seq_len
+        self.lbda = lbda
         self.num_emb = num_emb
         self.batch_size = batch_size
         self.emb_dim = emb_dim
@@ -100,7 +101,7 @@ class Generator(object):
             )
             # changed RMSProp to Adam
             optimizer_gan = tf.train.AdamOptimizer(self.learning_rate)
-            gradients_gan, v_gan = zip(*optimizer_gan.compute_gradients(self.rewards_loss + self.pretrain_loss))
+            gradients_gan, v_gan = zip(*optimizer_gan.compute_gradients(self.rewards_loss + self.lbda * self.pretrain_loss))
             gradients_gan, _gan = tf.clip_by_global_norm(gradients_gan, self.grad_clip)
             self.rewards_updates = optimizer_gan.apply_gradients(zip(gradients_gan, v_gan), global_step=self.global_step)
 
