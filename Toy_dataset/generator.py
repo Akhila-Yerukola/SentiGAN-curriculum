@@ -98,8 +98,9 @@ class Generator(object):
                         tf.reshape(self.g_predictions, [-1, self.num_emb]), 1e-20, 1.0)
                     , 1) * tf.reshape(self.rewards, [-1])
             )
-            optimizer_gan = tf.train.RMSPropOptimizer(self.learning_rate)
-            gradients_gan, v_gan = zip(*optimizer_gan.compute_gradients(self.rewards_loss))
+            # changed RMSProp to Adam
+            optimizer_gan = tf.train.AdamOptimizer(self.learning_rate)
+            gradients_gan, v_gan = zip(*optimizer_gan.compute_gradients(self.rewards_loss + self.pretrain_loss))
             gradients_gan, _gan = tf.clip_by_global_norm(gradients_gan, self.grad_clip)
             self.rewards_updates = optimizer_gan.apply_gradients(zip(gradients_gan, v_gan), global_step=self.global_step)
 
@@ -193,12 +194,12 @@ class Generator(object):
         target_x = x  # self.pad_target_data(x, end_id)
         # np.array([[1 / float(20)] * 20 + [0.0]] * self.batch_size)
 
-        [rewards_updates, rewards_loss] = sess.run([self.rewards_updates, self.rewards_loss], feed_dict={
+        [rewards_updates, rewards_loss, mle_loss] = sess.run([self.rewards_updates, self.rewards_loss, self.pretrain_loss], feed_dict={
             self.x: input_x,
             self.targets: target_x,
             self.rewards: rewards
         })
-        return rewards_loss
+        return rewards_loss, mle_loss
 
     def generate(self, sess):
         outputs = sess.run(self.out_tokens)

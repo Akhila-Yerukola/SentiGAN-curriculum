@@ -229,35 +229,14 @@ def main():
                 buffer = "%s\n%s\n\n" % (a, b)
                 # print(buffer)
                 log.write(buffer)
-                rewards_loss = generator.update_with_rewards(sess, samples, rewards, START_TOKEN)
-
-                # good rewards
-                # good_samples = gen_data_loader.next_batch()
-                # rewards = np.array([[1.0] * SEQ_LENGTH] * BATCH_SIZE)
-                # a = str(good_samples[0])
-                # b = str(rewards[0])
-                # buffer = "%s\n%s\n\n" % (a, b)
-                # print(buffer)
-                # log.write(buffer)
-                # rewards_loss = generator.update_with_rewards(sess, good_samples, rewards, START_TOKEN)
-
-                # little1 good reward
-                # litter1_samples = gen_data_loader.next_batch()
-                # rewards = generator.get_reward(sess, litter1_samples, 16, discriminator, START_TOKEN)
-                # a = str(little1 good reward[0])
-                # b = str(rewards[0])
-                # buffer = "%s\n%s\n\n" % (a, b)
-                # print(buffer)
-                # log.write(buffer)
-                # rewards_loss = generator.update_with_rewards(sess, litter1_samples, rewards, START_TOKEN)
-
+                rewards_loss, mle_loss = generator.update_with_rewards(sess, samples, rewards, START_TOKEN)
 
             # Test
             if total_batch % 1 == 0 or total_batch == TOTAL_BATCH - 1:
                 generate_samples(sess, generator, BATCH_SIZE, generated_num, eval_file)
                 likelihood_data_loader.create_batches(eval_file, seq_len)
                 test_loss = target_loss(sess, target_lstm, likelihood_data_loader)
-                buffer = 'reward-train epoch %s train loss %s test_loss %s\n' % (str(total_batch), str(rewards_loss), str(test_loss))
+                buffer = 'reward-train epoch %s train loss %s mle loss %s test_loss %s\n' % (str(total_batch), str(rewards_loss), str(mle_loss), str(test_loss))
                 print(buffer)
                 log.write(buffer)
                 ans_file.write("%s\n" % str(test_loss))
