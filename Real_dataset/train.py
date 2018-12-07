@@ -10,7 +10,7 @@ import argparse
 parser = argparse.ArgumentParser(description='SentiGAN with curriculum training')
 parser.add_argument('--seq_len', type=int, default=1,
                     help='sequence length to start curriculum training from')
-parser.add_argument('--max_seq_len', type=int, default=20,
+parser.add_argument('--max_seq_len', type=int, default=17,
                     help='sequence length to end curriculum training at')
 parser.add_argument('--save', type=str, default='save',
                     help='location of save the model and logs')
@@ -28,7 +28,7 @@ args = parser.parse_args()
 ######################################################################################
 EMB_DIM = 200 # embedding dimension
 HIDDEN_DIM = 200 # hidden state dimension of lstm cell
-MAX_SEQ_LENGTH = 17  # max sequence length
+MAX_SEQ_LENGTH = args.max_seq_len  # max sequence length
 BATCH_SIZE = 64
 
 
@@ -162,7 +162,7 @@ def main():
 
     # load embedding info
     vocab_dict, vocab_size, vocab_list = load_emb_data(emb_dict_file)
-
+    seq_len = args.seq_len
     # prepare data
     pre_train_data_loader = Gen_Data_loader(BATCH_SIZE, vocab_dict)
     pre_train_data_loader.create_batches([imdb_file_id, sst_pos_file_id, sst_neg_file_id])
@@ -171,114 +171,43 @@ def main():
     gen_data_loader.create_batches([sst_pos_file_id, sst_neg_file_id])
 
     dis_data_loader = Dis_Data_loader(BATCH_SIZE, vocab_dict, MAX_SEQ_LENGTH)
+    generator = None
+    discriminator = None
+    target_lstm = None
+    while seq_len <= MAX_SEQ_LENGTH:
+        # build model
+        # num_emb, vocab_dict, batch_size, emb_dim, num_units, sequence_length
+        
+        generator = Generator(num_emb = vocab_size, vocab_dict = vocab_dict, batch_size = BATCH_SIZE, emb_dim = EMB_DIM, num_units = HIDDEN_DIM,
+                 max_sequence_length = MAX_SEQ_LENGTH, true_seq_len=seq_len, save_model_path = args.save, lbda=args.lbda) if generator is None else generator
+        discriminator = Discriminator(sequence_length=MAX_SEQ_LENGTH, num_classes=2,
+                                      vocab_size=vocab_size,
+                                      embedding_size=dis_embedding_dim,
+                                      filter_sizes=dis_filter_sizes, num_filters=dis_num_filters,
+                                      l2_reg_lambda=dis_l2_reg_lambda, save_model_path=args.save) if discriminator is None else discriminator
 
-    # build model
-    # num_emb, vocab_dict, batch_size, emb_dim, num_units, sequence_length
-    generator = Generator(vocab_size, vocab_dict, BATCH_SIZE, EMB_DIM, HIDDEN_DIM, MAX_SEQ_LENGTH)
-    discriminator = Discriminator(sequence_length=MAX_SEQ_LENGTH, num_classes=2,
-                                  vocab_size=vocab_size,
-                                  embedding_size=dis_embedding_dim,
-                                  filter_sizes=dis_filter_sizes, num_filters=dis_num_filters,
-                                  l2_reg_lambda=dis_l2_reg_lambda)
+        config = tf.ConfigProto()
+        config.gpu_options.allow_growth = True
+        sess = tf.Session(config=config)
+        sess.run(tf.global_variables_initializer())
 
-    config = tf.ConfigProto()
-    config.gpu_options.allow_growth = True
-    sess = tf.Session(config=config)
-    sess.run(tf.global_variables_initializer())
+        log = open(args.save + '/experiment-log' + str(seq_len) + '.txt', 'w')
 
-    log = open(args.save + '/experiment-log.txt', 'w')
-
-    buffer = 'Start pre-training generator...'
-    print(buffer)
-    log.write(buffer + '\n')
-    for epoch in range(args.gen_pre_epoch):  #120
-        train_loss = pre_train_epoch(sess, generator, pre_train_data_loader)
-        if epoch % 5 == 0:
-            generate_samples(sess, generator, 1, eval_file, vocab_list, if_log=True, epoch=epoch)
-            print('    pre-train epoch ', epoch, 'train_loss ', train_loss)
-            buffer = '    epoch:\t' + str(epoch) + '\tnll:\t' + str(train_loss) + '\n'
-            log.write(buffer)
-
-    buffer = 'Start pre-training discriminator...'
-    print(buffer)
-    log.write(buffer)
-    for _ in range(args.disc_pre_epoch):   # 10
-        generate_samples(sess, generator, 70, negative_file, vocab_list)
-        dis_data_loader.load_train_data([sst_pos_file_id, sst_neg_file_id], [negative_file])
-        for _ in range(3):
-            dis_data_loader.reset_pointer()
-            for it in range(dis_data_loader.num_batch):
-                x_batch, y_batch = dis_data_loader.next_batch()
-                feed = {
-                    discriminator.input_x: x_batch,
-                    discriminator.input_y: y_batch,
-                    discriminator.dropout_keep_prob: dis_dropout_keep_prob,
-                }
-                d_loss, d_acc, _ = sess.run([discriminator.loss, discriminator.accuracy, discriminator.train_op], feed)
-        buffer = "discriminator loss %f acc %f" % (d_loss, d_acc)
+        buffer = 'Start pre-training generator...'
         print(buffer)
         log.write(buffer + '\n')
+        for epoch in range(args.gen_pre_epoch):  #120
+            train_loss = pre_train_epoch(sess, generator, pre_train_data_loader)
+            if epoch % 5 == 0:
+                generate_samples(sess, generator, 1, eval_file, vocab_list, if_log=True, epoch=epoch)
+                print('    pre-train epoch ', epoch, 'train_loss ', train_loss)
+                buffer = '    epoch:\t' + str(epoch) + '\tnll:\t' + str(train_loss) + '\n'
+                log.write(buffer)
 
-    print("Start Adversarial Training...")
-    log.write('adversarial training...')
-    for total_batch in range(TOTAL_BATCH):
-        # Train the generator
-        for it in range(2):
-            # print("1")
-            samples = generator.generate(sess)
-            samples = produce_samples(samples)
-            # print("2")
-            rewards = generator.get_reward(sess, samples, 16, discriminator)
-            # print("3")
-            a = str(samples[0])
-            b = str(rewards[0])
-            # rewards = change_rewards(rewards)
-            # c = str(rewards[0])
-            d = build_from_ids(samples[0], vocab_list)
-            buffer = "%s\n%s\n%s\n\n" % (d, a, b)
-            print(buffer)
-            log.write(buffer)
-
-            # print("4")
-            rewards_loss = generator.update_with_rewards(sess, samples, rewards)
-            # print("5")
-            # good rewards
-            # good_samples = gen_data_loader.next_batch()
-            # rewards = np.array([[0.0001] * SEQ_LENGTH] * BATCH_SIZE)
-            # a = str(good_samples[0])
-            # b = str(rewards[0])
-            # buffer = "%s\n%s\n\n" % (a, b)
-            # print(buffer)
-            # log.write(buffer)
-            # rewards_loss = generator.update_with_rewards(sess, good_samples, rewards, START_TOKEN)
-
-            # little1 good reward
-            little1_samples = gen_data_loader.next_batch()
-            rewards = generator.get_reward(sess, little1_samples, 16, discriminator)
-            a = str(little1_samples[0])
-            b = str(rewards[0])
-            buffer = "%s\n%s\n\n" % (a, b)
-            # print(buffer)
-            log.write(buffer)
-            rewards_loss = generator.update_with_rewards(sess, little1_samples, rewards)
-
-        # generate_infer(sess, generator, epoch, vocab_list)
-
-        # Test
-        if total_batch % 5 == 0 or total_batch == TOTAL_BATCH - 1:
-            generate_samples(sess, generator, 120, eval_file, vocab_list, if_log=True)
-            generate_infer(sess, generator, total_batch, vocab_list)
-            # generate_samples(sess, generator, BATCH_SIZE, generated_num, eval_file)
-            # likelihood_data_loader.create_batches(eval_file)
-            # test_loss = target_loss(sess, target_lstm, likelihood_data_loader)
-            buffer = 'reward-train epoch %s train loss %s' % (str(total_batch), str(rewards_loss))
-            print(buffer)
-            log.write(buffer + '\n')
-            generator.save_model(sess)
-
-        # Train the discriminator
-        begin = True
-        for _ in range(1):
+        buffer = 'Start pre-training discriminator...'
+        print(buffer)
+        log.write(buffer)
+        for _ in range(args.disc_pre_epoch):   # 10
             generate_samples(sess, generator, 70, negative_file, vocab_list)
             dis_data_loader.load_train_data([sst_pos_file_id, sst_neg_file_id], [negative_file])
             for _ in range(3):
@@ -290,17 +219,95 @@ def main():
                         discriminator.input_y: y_batch,
                         discriminator.dropout_keep_prob: dis_dropout_keep_prob,
                     }
-                    d_loss, d_acc, _ = sess.run([discriminator.loss, discriminator.accuracy, discriminator.train_op],
-                                                feed)
-                    if (total_batch % 5 == 0 or total_batch == TOTAL_BATCH - 1) and begin:
-                        buffer = "discriminator loss %f acc %f\n" % (d_loss, d_acc)
-                        print(buffer)
-                        log.write(buffer)
-                        begin = False
+                    d_loss, d_acc, _ = sess.run([discriminator.loss, discriminator.accuracy, discriminator.train_op], feed)
+            buffer = "discriminator loss %f acc %f" % (d_loss, d_acc)
+            print(buffer)
+            log.write(buffer + '\n')
 
-        # pretrain
-        for _ in range(10):
-            train_loss = pre_train_epoch(sess, generator, pre_train_data_loader)
+        print("Start Adversarial Training...")
+        log.write('adversarial training...')
+        for total_batch in range(TOTAL_BATCH):
+            # Train the generator
+            for it in range(2):
+                # print("1")
+                samples = generator.generate(sess)
+                samples = produce_samples(samples)
+                # print("2")
+                rewards = generator.get_reward(sess, samples, 16, discriminator)
+                # print("3")
+                a = str(samples[0])
+                b = str(rewards[0])
+                # rewards = change_rewards(rewards)
+                # c = str(rewards[0])
+                d = build_from_ids(samples[0], vocab_list)
+                buffer = "%s\n%s\n%s\n\n" % (d, a, b)
+                print(buffer)
+                log.write(buffer)
+
+                # print("4")
+                rewards_loss = generator.update_with_rewards(sess, samples, rewards)
+                # print("5")
+                # good rewards
+                # good_samples = gen_data_loader.next_batch()
+                # rewards = np.array([[0.0001] * SEQ_LENGTH] * BATCH_SIZE)
+                # a = str(good_samples[0])
+                # b = str(rewards[0])
+                # buffer = "%s\n%s\n\n" % (a, b)
+                # print(buffer)
+                # log.write(buffer)
+                # rewards_loss = generator.update_with_rewards(sess, good_samples, rewards, START_TOKEN)
+
+                # little1 good reward
+                little1_samples = gen_data_loader.next_batch()
+                rewards = generator.get_reward(sess, little1_samples, 16, discriminator)
+                a = str(little1_samples[0])
+                b = str(rewards[0])
+                buffer = "%s\n%s\n\n" % (a, b)
+                # print(buffer)
+                log.write(buffer)
+                rewards_loss = generator.update_with_rewards(sess, little1_samples, rewards)
+
+            # generate_infer(sess, generator, epoch, vocab_list)
+
+            # Test
+            if total_batch % 5 == 0 or total_batch == TOTAL_BATCH - 1:
+                generate_samples(sess, generator, 120, eval_file, vocab_list, if_log=True)
+                generate_infer(sess, generator, total_batch, vocab_list)
+                # generate_samples(sess, generator, BATCH_SIZE, generated_num, eval_file)
+                # likelihood_data_loader.create_batches(eval_file)
+                # test_loss = target_loss(sess, target_lstm, likelihood_data_loader)
+                buffer = 'reward-train epoch %s train loss %s' % (str(total_batch), str(rewards_loss))
+                print(buffer)
+                log.write(buffer + '\n')
+                generator.save_model(sess)
+
+            if total_batch % 20 == 0 or total_batch == TOTAL_BATCH - 1: generator.save_model(sess, seq_len)
+
+            # Train the discriminator
+            begin = True
+            for _ in range(1):
+                generate_samples(sess, generator, 70, negative_file, vocab_list)
+                dis_data_loader.load_train_data([sst_pos_file_id, sst_neg_file_id], [negative_file])
+                for _ in range(3):
+                    dis_data_loader.reset_pointer()
+                    for it in range(dis_data_loader.num_batch):
+                        x_batch, y_batch = dis_data_loader.next_batch()
+                        feed = {
+                            discriminator.input_x: x_batch,
+                            discriminator.input_y: y_batch,
+                            discriminator.dropout_keep_prob: dis_dropout_keep_prob,
+                        }
+                        d_loss, d_acc, _ = sess.run([discriminator.loss, discriminator.accuracy, discriminator.train_op],
+                                                    feed)
+                        if (total_batch % 5 == 0 or total_batch == TOTAL_BATCH - 1) and begin:
+                            buffer = "discriminator loss %f acc %f\n" % (d_loss, d_acc)
+                            print(buffer)
+                            log.write(buffer)
+                            begin = False
+            if total_batch %20 == 0 or total_batch == TOTAL_BATCH - 1: discriminator.save_model(sess, seq_len)
+            # pretrain
+            for _ in range(10):
+                train_loss = pre_train_epoch(sess, generator, pre_train_data_loader)
 
 # def change_rewards(rewards):
 #     ans = []

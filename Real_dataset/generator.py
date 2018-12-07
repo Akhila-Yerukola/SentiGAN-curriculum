@@ -6,8 +6,11 @@ import numpy as np
 
 class Generator(object):
     def __init__(self, num_emb, vocab_dict, batch_size, emb_dim, num_units,
-                 max_sequence_length, learning_rate=0.01, reward_gamma=0.95,
+                 max_sequence_length, learning_rate=0.01, reward_gamma=0.95, 
+                 true_seq_len=17, save_model_path='save', lbda=1
                  ):
+        self.save_model_path = save_model_path
+        self.true_seq_len = true_seq_len
         self.num_emb = num_emb
         self.vocab_dict = vocab_dict
         self.batch_size = batch_size
@@ -76,8 +79,8 @@ class Generator(object):
             self.targets = tf.placeholder(dtype=tf.int32, shape=[None, None])
             self.target_weights = tf.placeholder(dtype=tf.float32, shape=[None, None])
 
-            crossent = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.targets, logits=self.logits_pt)
-            self.pretrain_loss = tf.reduce_sum(crossent * self.target_weights) / tf.to_float(self.batch_size)
+            crossent = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.targets[:, :self.true_seq_len], logits=self.logits_pt[:, :self.true_seq_len, :])
+            self.pretrain_loss = tf.reduce_sum(crossent * self.target_weights[:, :self.true_seq_len]) / tf.to_float(self.batch_size)
 
             self.global_step = tf.Variable(0, trainable=False)
             optimizer = tf.train.AdamOptimizer(self.learning_rate)
@@ -94,7 +97,7 @@ class Generator(object):
                     , 1) * tf.reshape(self.rewards, [-1])  # * tf.reshape(self.target_weights, [-1])
             )
             optimizer_gan = tf.train.RMSPropOptimizer(self.learning_rate)
-            gradients_gan, v_gan = zip(*optimizer_gan.compute_gradients(self.rewards_loss))
+            gradients_gan, v_gan = zip(*optimizer_gan.compute_gradients(self.rewards_loss + self.lbda * self.pretrain_loss))
             gradients_gan, _gan = tf.clip_by_global_norm(gradients_gan, self.grad_clip)
             self.rewards_updates = optimizer_gan.apply_gradients(zip(gradients_gan, v_gan), global_step=self.global_step)
 
@@ -208,6 +211,10 @@ class Generator(object):
 
         self.saver = tf.train.Saver(tf.global_variables(), max_to_keep=1)
 
+    def save_model(self, sess, i):
+        self.saver.save(sess, self.save_model_path + '/ckpt/generator' + str(i) + '.ckpt')
+        print("save generator model success!")
+
     def pretrain_step(self, sess, x):
         input_x, lengths_x = self.pad_input_data(x)
         target_x = self.pad_target_data(x)
@@ -226,14 +233,14 @@ class Generator(object):
         target_x = self.pad_target_data(x)
         target_weights = self.get_weights(lengths_x)
 
-        [rewards_updates, rewards_loss] = sess.run([self.rewards_updates, self.rewards_loss], feed_dict={
+        [rewards_updates, rewards_loss, mle_loss] = sess.run([self.rewards_updates, self.rewards_loss, self.pretrain_loss], feed_dict={
             self.x: input_x,
             self.sequence_lengths: [self.max_sequence_length] * self.batch_size,
             self.targets: target_x,
             self.rewards: rewards,
             self.target_weights: target_weights
         })
-        return rewards_loss
+        return rewards_loss, mle_loss
 
     def generate(self, sess):
         [outputs] = sess.run([self.out_tokens])
@@ -303,7 +310,7 @@ class Generator(object):
         rewards = []
 
         for i in range(rollout_num):
-            for given_num in range(1, self.max_sequence_length):
+            for given_num in range(1, self.true_seq_len):
 
                 rollout_next_id = []
                 for _item in x:
@@ -357,7 +364,8 @@ class Generator(object):
             # print(len(rewards[0]))
             # print(rewards[0])
             # input()
-
+        for count in range(self.max_sequence_length - self.true_seq_len):
+            rewards.append([0.] * self.batch_size)
         rewards = np.transpose(np.array(rewards)) / (1.0 * rollout_num)  # batch_size x seq_length
         rewards = self.get_new_rewards(lengths_x, rewards)
         return rewards
