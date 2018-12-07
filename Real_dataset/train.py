@@ -181,6 +181,8 @@ def main():
     while seq_len <= MAX_SEQ_LENGTH:
         # build model
         # num_emb, vocab_dict, batch_size, emb_dim, num_units, sequence_length
+        print("Current sequence length is " + str(seq_len))
+        print('Args:', args)
         pre_train_data_loader.create_batches([imdb_file_id, sst_pos_file_id, sst_neg_file_id], seq_len)
         gen_data_loader.create_batches([sst_pos_file_id, sst_neg_file_id], seq_len)
         generator = Generator(num_emb = vocab_size, vocab_dict = vocab_dict, batch_size = BATCH_SIZE, emb_dim = EMB_DIM, num_units = HIDDEN_DIM,
@@ -214,7 +216,7 @@ def main():
         log.write(buffer)
         for _ in range(args.disc_pre_epoch):   # 10
             generate_samples(sess, generator, 70, negative_file, vocab_list)
-            dis_data_loader.load_train_data([sst_pos_file_id, sst_neg_file_id], [negative_file])
+            dis_data_loader.load_train_data([sst_pos_file_id, sst_neg_file_id], [negative_file], seq_len)
             for _ in range(3):
                 dis_data_loader.reset_pointer()
                 for it in range(dis_data_loader.num_batch):
@@ -280,7 +282,7 @@ def main():
             begin = True
             for _ in range(1):
                 generate_samples(sess, generator, 70, negative_file, vocab_list)
-                dis_data_loader.load_train_data([sst_pos_file_id, sst_neg_file_id], [negative_file])
+                dis_data_loader.load_train_data([sst_pos_file_id, sst_neg_file_id], [negative_file], seq_len)
                 for _ in range(3):
                     dis_data_loader.reset_pointer()
                     for it in range(dis_data_loader.num_batch):
@@ -301,6 +303,7 @@ def main():
             # pretrain
             for _ in range(10):
                 train_loss = pre_train_epoch(sess, generator, pre_train_data_loader)
+        seq_len += 1
 
 
 

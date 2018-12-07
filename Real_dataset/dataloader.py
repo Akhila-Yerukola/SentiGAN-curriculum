@@ -46,7 +46,7 @@ class Dis_Data_loader():
         self.vocab_dict = vocab_dict
         self.max_sequence_length = max_sequence_length
 
-    def load_train_data(self, positive_file_list, negative_file_list):
+    def load_train_data(self, positive_file_list, negative_file_list, seq_len):
         # Load data
         positive_examples = []
         negative_examples = []
