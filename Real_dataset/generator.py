@@ -9,6 +9,7 @@ class Generator(object):
                  max_sequence_length, learning_rate=0.01, reward_gamma=0.95, 
                  true_seq_len=17, save_model_path='save', lbda=1
                  ):
+        self.lbda = lbda
         self.save_model_path = save_model_path
         self.true_seq_len = true_seq_len
         self.num_emb = num_emb
@@ -359,7 +360,7 @@ class Generator(object):
             if i == 0:
                 rewards.append(ypred)
             else:
-                rewards[self.max_sequence_length - 1] += ypred
+                rewards[self.true_seq_len - 1] += ypred
             # print(len(rewards))
             # print(len(rewards[0]))
             # print(rewards[0])
@@ -388,7 +389,7 @@ class Generator(object):
                 inputs_batch_major[i, j] = element
         return inputs_batch_major
 
-    def save_model(self, sess):
-        self.saver.save(sess, 'save/ckpt/model.ckpt')
-        print("save model success!")
+    def save_model(self, sess, i):
+        self.saver.save(sess, self.save_model_path + '/ckpt/generator' + str(i) + '.ckpt')
+        print("save generator model success!")
 

@@ -20,6 +20,8 @@ parser.add_argument('--gen_pre_epoch', type=int, default=150,
                     help='discriminator pre train epochs')
 parser.add_argument('--adversarial_epoch', type=int, default=2000,
                     help='adversarial training epochs')
+parser.add_argument('--lbda', type=float, default=1,
+                    help='weightage of mle during adv training')
 args = parser.parse_args()
 
 
@@ -49,7 +51,9 @@ dis_batch_size = 64
 TOTAL_BATCH = args.adversarial_epoch
 import os
 if not os.path.exists(args.save):
-    os.makedirs(args.save) 
+    os.makedirs(args.save)
+if not os.path.exists(args.save + '/infer'):
+    os.makedirs(args.save + '/infer') 
 dataset_path = "data/movie/"
 emb_dict_file = dataset_path + "imdb_word.vocab"
 
@@ -279,7 +283,7 @@ def main():
                 buffer = 'reward-train epoch %s train loss %s' % (str(total_batch), str(rewards_loss))
                 print(buffer)
                 log.write(buffer + '\n')
-                generator.save_model(sess)
+                
 
             if total_batch % 20 == 0 or total_batch == TOTAL_BATCH - 1: generator.save_model(sess, seq_len)
 
