@@ -54,6 +54,9 @@ if not os.path.exists(args.save):
     os.makedirs(args.save)
 if not os.path.exists(args.save + '/infer'):
     os.makedirs(args.save + '/infer') 
+for seq_len in range(MAX_SEQ_LENGTH):
+    if not os.path.exists(args.save + '/infer/' +  str(seq_len)):
+        os.makedirs(args.save + '/infer/' +  str(seq_len))
 dataset_path = "data/movie/"
 emb_dict_file = dataset_path + "imdb_word.vocab"
 
@@ -102,12 +105,12 @@ def generate_samples(sess, trainable_model, generated_num, output_file, vocab_li
             fout.write(buffer)
 
 
-def generate_infer(sess, trainable_model, epoch, vocab_list):
+def generate_infer(sess, trainable_model, epoch, vocab_list, seq_len):
     generated_samples = []
     for _ in range(int(100)):
         # generated_samples.extend(trainable_model.infer(sess))
         generated_samples.extend(trainable_model.generate(sess))
-    file = infer_file+str(epoch)+'.txt'
+    file = infer_file  + '/' +  str(seq_len) + '/' + str(epoch)+'.txt'
     with open(file, 'w') as fout:
         for poem in generated_samples:
             poem = list(poem)
@@ -248,7 +251,7 @@ def main():
                 # c = str(rewards[0])
                 d = build_from_ids(samples[0], vocab_list)
                 buffer = "%s\n%s\n%s\n\n" % (d, a, b)
-                print(buffer)
+                # print(buffer)
                 log.write(buffer)
 
                 # print("4")
@@ -268,9 +271,9 @@ def main():
             # generate_infer(sess, generator, epoch, vocab_list)
 
             # Test
-            if total_batch % 5 == 0 or total_batch == TOTAL_BATCH - 1:
+            if total_batch % 10 == 0 or total_batch == TOTAL_BATCH - 1:
                 generate_samples(sess, generator, 120, eval_file, vocab_list, if_log=True)
-                generate_infer(sess, generator, total_batch, vocab_list)
+                generate_infer(sess, generator, total_batch, vocab_list, seq_len)
                 buffer = 'reward-train epoch %s train loss %s' % (str(total_batch), str(rewards_loss))
                 print(buffer)
                 log.write(buffer + '\n')
@@ -294,12 +297,12 @@ def main():
                         }
                         d_loss, d_acc, _ = sess.run([discriminator.loss, discriminator.accuracy, discriminator.train_op],
                                                     feed)
-                        if (total_batch % 5 == 0 or total_batch == TOTAL_BATCH - 1) and begin:
+                        if (total_batch % 10 == 0 or total_batch == TOTAL_BATCH - 1) and begin:
                             buffer = "discriminator loss %f acc %f\n" % (d_loss, d_acc)
                             print(buffer)
                             log.write(buffer)
                             begin = False
-            if total_batch %20 == 0 or total_batch == TOTAL_BATCH - 1: discriminator.save_model(sess, seq_len)
+            if total_batch % 20 == 0 or total_batch == TOTAL_BATCH - 1: discriminator.save_model(sess, seq_len)
             # pretrain
             for _ in range(10):
                 train_loss = pre_train_epoch(sess, generator, pre_train_data_loader)
