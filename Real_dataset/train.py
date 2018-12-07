@@ -168,11 +168,11 @@ def main():
     vocab_dict, vocab_size, vocab_list = load_emb_data(emb_dict_file)
     seq_len = args.seq_len
     # prepare data
-    pre_train_data_loader = Gen_Data_loader(BATCH_SIZE, vocab_dict)
-    pre_train_data_loader.create_batches([imdb_file_id, sst_pos_file_id, sst_neg_file_id])
+    pre_train_data_loader = Gen_Data_loader(BATCH_SIZE, vocab_dict, MAX_SEQ_LENGTH)
+    
 
-    gen_data_loader = Gen_Data_loader(BATCH_SIZE, vocab_dict)
-    gen_data_loader.create_batches([sst_pos_file_id, sst_neg_file_id])
+    gen_data_loader = Gen_Data_loader(BATCH_SIZE, vocab_dict, MAX_SEQ_LENGTH)
+    
 
     dis_data_loader = Dis_Data_loader(BATCH_SIZE, vocab_dict, MAX_SEQ_LENGTH)
     generator = None
@@ -181,7 +181,8 @@ def main():
     while seq_len <= MAX_SEQ_LENGTH:
         # build model
         # num_emb, vocab_dict, batch_size, emb_dim, num_units, sequence_length
-        
+        pre_train_data_loader.create_batches([imdb_file_id, sst_pos_file_id, sst_neg_file_id], seq_len)
+        gen_data_loader.create_batches([sst_pos_file_id, sst_neg_file_id], seq_len)
         generator = Generator(num_emb = vocab_size, vocab_dict = vocab_dict, batch_size = BATCH_SIZE, emb_dim = EMB_DIM, num_units = HIDDEN_DIM,
                  max_sequence_length = MAX_SEQ_LENGTH, true_seq_len=seq_len, save_model_path = args.save, lbda=args.lbda) if generator is None else generator
         discriminator = Discriminator(sequence_length=MAX_SEQ_LENGTH, num_classes=2,
@@ -251,16 +252,7 @@ def main():
                 # print("4")
                 rewards_loss = generator.update_with_rewards(sess, samples, rewards)
                 # print("5")
-                # good rewards
-                # good_samples = gen_data_loader.next_batch()
-                # rewards = np.array([[0.0001] * SEQ_LENGTH] * BATCH_SIZE)
-                # a = str(good_samples[0])
-                # b = str(rewards[0])
-                # buffer = "%s\n%s\n\n" % (a, b)
-                # print(buffer)
-                # log.write(buffer)
-                # rewards_loss = generator.update_with_rewards(sess, good_samples, rewards, START_TOKEN)
-
+                
                 # little1 good reward
                 little1_samples = gen_data_loader.next_batch()
                 rewards = generator.get_reward(sess, little1_samples, 16, discriminator)
@@ -277,9 +269,6 @@ def main():
             if total_batch % 5 == 0 or total_batch == TOTAL_BATCH - 1:
                 generate_samples(sess, generator, 120, eval_file, vocab_list, if_log=True)
                 generate_infer(sess, generator, total_batch, vocab_list)
-                # generate_samples(sess, generator, BATCH_SIZE, generated_num, eval_file)
-                # likelihood_data_loader.create_batches(eval_file)
-                # test_loss = target_loss(sess, target_lstm, likelihood_data_loader)
                 buffer = 'reward-train epoch %s train loss %s' % (str(total_batch), str(rewards_loss))
                 print(buffer)
                 log.write(buffer + '\n')
@@ -313,16 +302,6 @@ def main():
             for _ in range(10):
                 train_loss = pre_train_epoch(sess, generator, pre_train_data_loader)
 
-# def change_rewards(rewards):
-#     ans = []
-#     for item in rewards:
-#         ans_i = []
-#         last_v = 0.0
-#         for j in range(len(item)):
-#             ans_i.append(max(0.0, item[j] - last_v))
-#             last_v = item[j]
-#         ans.append(ans_i)
-#     return ans
 
 
 def build_from_ids(vv, vocab_list):

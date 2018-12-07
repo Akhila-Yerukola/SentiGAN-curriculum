@@ -2,13 +2,14 @@ import numpy as np
 
 
 class Gen_Data_loader():
-    def __init__(self, batch_size, vocab_dict):
+    def __init__(self, batch_size, vocab_dict, max_sequence_length):
         self.batch_size = batch_size
         self.token_stream = []
         self.vocab_size = 0
         self.vocab_dict = vocab_dict
+        self.max_sequence_length = max_sequence_length
 
-    def create_batches(self, data_file_list):
+    def create_batches(self, data_file_list, seq_len):
         """make self.token_stream into a integer stream."""
         self.token_stream = []
         print("load %s file data.." % ' '.join(data_file_list))
@@ -18,7 +19,7 @@ class Gen_Data_loader():
                     line = line.strip()
                     line = line.split()
                     parse_line = [int(x) for x in line]
-                    self.token_stream.append(parse_line)
+                    self.token_stream.append(parse_line[:seq_len] + [0] * (self.max_sequence_length - seq_len))
 
         self.num_batch = int(len(self.token_stream) / self.batch_size)
         # cut the taken_stream's length exactly equal to num_batch * batch_size
@@ -55,14 +56,14 @@ class Dis_Data_loader():
                     line = line.strip()
                     line = line.split()
                     parse_line = [int(x) for x in line]
-                    positive_examples.append(parse_line)
+                    positive_examples.append(parse_line[:seq_len] + [0] * (self.max_sequence_length - seq_len))
         for negative_file in negative_file_list:
             with open(negative_file)as fin:
                 for line in fin:
                     line = line.strip()
                     line = line.split()
                     parse_line = [int(x) for x in line]
-                    negative_examples.append(parse_line)
+                    negative_examples.append(parse_line[:seq_len] + [0] * (self.max_sequence_length - seq_len))
 
         self.sentences = np.array(positive_examples + negative_examples)
         self.sentences = self.padding(self.sentences, self.max_sequence_length)
