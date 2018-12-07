@@ -7,6 +7,21 @@ from generator import Generator
 from discriminator import Discriminator
 # from rollout import ROLLOUT
 
+parser = argparse.ArgumentParser(description='SentiGAN with curriculum training')
+parser.add_argument('--seq_len', type=int, default=1,
+                    help='sequence length to start curriculum training from')
+parser.add_argument('--max_seq_len', type=int, default=20,
+                    help='sequence length to end curriculum training at')
+parser.add_argument('--save', type=str, default='save',
+                    help='location of save the model and logs')
+parser.add_argument('--disc_pre_epoch', type=int, default=10,
+                    help='discriminator pre train epochs')
+parser.add_argument('--gen_pre_epoch', type=int, default=150,
+                    help='discriminator pre train epochs')
+parser.add_argument('--adversarial_epoch', type=int, default=2000,
+                    help='adversarial training epochs')
+args = parser.parse_args()
+
 
 #########################################################################################
 #  Generator  Hyper-parameters
@@ -31,7 +46,10 @@ dis_batch_size = 64
 #########################################################################################
 #  Basic Training Parameters
 #########################################################################################
-TOTAL_BATCH = 2000
+TOTAL_BATCH = args.adversarial_epoch
+import os
+if not os.path.exists(args.save):
+    os.makedirs(args.save) 
 dataset_path = "../../data/movie/"
 emb_dict_file = dataset_path + "imdb_word.vocab"
 
@@ -46,10 +64,10 @@ sst_neg_file_txt = dataset_path + 'sstb/sst_neg_sentences.txt'
 sst_neg_file_id = dataset_path + 'sstb/sst_neg_sentences.id'
 
 
-eval_file = 'save/eval_file.txt'
-eval_text_file = 'save/eval_text_file.txt'
-negative_file = 'save/generator_sample.txt'
-infer_file = 'save/infer/'
+eval_file = args.save + '/eval_file.txt'
+eval_text_file = args.save + '/eval_text_file.txt'
+negative_file = args.save + '/generator_sample.txt'
+infer_file = args.save + '/infer/'
 
 
 def generate_samples(sess, trainable_model, generated_num, output_file, vocab_list, if_log=False, epoch=0):
@@ -173,7 +191,7 @@ def main():
     buffer = 'Start pre-training generator...'
     print(buffer)
     log.write(buffer + '\n')
-    for epoch in range(150):  #120
+    for epoch in range(args.gen_pre_epoch):  #120
         train_loss = pre_train_epoch(sess, generator, pre_train_data_loader)
         if epoch % 5 == 0:
             generate_samples(sess, generator, 1, eval_file, vocab_list, if_log=True, epoch=epoch)
@@ -184,7 +202,7 @@ def main():
     buffer = 'Start pre-training discriminator...'
     print(buffer)
     log.write(buffer)
-    for _ in range(10):   # 10
+    for _ in range(args.disc_pre_epoch):   # 10
         generate_samples(sess, generator, 70, negative_file, vocab_list)
         dis_data_loader.load_train_data([sst_pos_file_id, sst_neg_file_id], [negative_file])
         for _ in range(3):
