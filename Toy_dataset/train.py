@@ -22,7 +22,7 @@ parser.add_argument('--gen_pre_epoch', type=int, default=100,
                     help='discriminator pre train epochs')
 parser.add_argument('--adversarial_epoch', type=int, default=350,
                     help='adversarial training epochs')
-parser.add_argument('--lbda', type=int, default=1,
+parser.add_argument('--lbda', type=float, default=1,
                     help='weightage of mle during adv training')
 args = parser.parse_args()
 
@@ -41,7 +41,7 @@ BATCH_SIZE = 64
 #  Discriminator  Hyper-parameters
 #########################################################################################
 dis_embedding_dim = 64
-dis_filter_sizes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 19]
+dis_filter_sizes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20]
 dis_num_filters = [100, 200, 200, 200, 200, 100, 100, 100, 100, 100, 160, 160]
 dis_dropout_keep_prob = 0.75
 dis_l2_reg_lambda = 0.2
