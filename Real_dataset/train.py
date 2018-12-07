@@ -6,7 +6,7 @@ import pickle
 from generator import Generator
 from discriminator import Discriminator
 # from rollout import ROLLOUT
-
+import argparse
 parser = argparse.ArgumentParser(description='SentiGAN with curriculum training')
 parser.add_argument('--seq_len', type=int, default=1,
                     help='sequence length to start curriculum training from')
@@ -50,7 +50,7 @@ TOTAL_BATCH = args.adversarial_epoch
 import os
 if not os.path.exists(args.save):
     os.makedirs(args.save) 
-dataset_path = "../../data/movie/"
+dataset_path = "data/movie/"
 emb_dict_file = dataset_path + "imdb_word.vocab"
 
 # imdb corpus
@@ -186,7 +186,7 @@ def main():
     sess = tf.Session(config=config)
     sess.run(tf.global_variables_initializer())
 
-    log = open('save/experiment-log.txt', 'w')
+    log = open(args.save + '/experiment-log.txt', 'w')
 
     buffer = 'Start pre-training generator...'
     print(buffer)
