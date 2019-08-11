@@ -54,7 +54,7 @@ if not os.path.exists(args.save):
     os.makedirs(args.save)
 if not os.path.exists(args.save + '/infer'):
     os.makedirs(args.save + '/infer') 
-for seq_len in range(MAX_SEQ_LENGTH):
+for seq_len in range(1, MAX_SEQ_LENGTH+1):
     if not os.path.exists(args.save + '/infer/' +  str(seq_len)):
         os.makedirs(args.save + '/infer/' +  str(seq_len))
 dataset_path = "data/movie/"
@@ -190,6 +190,7 @@ def main():
         gen_data_loader.create_batches([sst_pos_file_id, sst_neg_file_id], seq_len)
         generator = Generator(num_emb = vocab_size, vocab_dict = vocab_dict, batch_size = BATCH_SIZE, emb_dim = EMB_DIM, num_units = HIDDEN_DIM,
                  max_sequence_length = MAX_SEQ_LENGTH, true_seq_len=seq_len, save_model_path = args.save, lbda=args.lbda) if generator is None else generator
+        generator.true_seq_len = seq_len
         discriminator = Discriminator(sequence_length=MAX_SEQ_LENGTH, num_classes=2,
                                       vocab_size=vocab_size,
                                       embedding_size=dis_embedding_dim,
@@ -271,7 +272,7 @@ def main():
             # generate_infer(sess, generator, epoch, vocab_list)
 
             # Test
-            if total_batch % 10 == 0 or total_batch == TOTAL_BATCH - 1:
+            if total_batch % 20 == 0 or total_batch == TOTAL_BATCH - 1:
                 generate_samples(sess, generator, 120, eval_file, vocab_list, if_log=True)
                 generate_infer(sess, generator, total_batch, vocab_list, seq_len)
                 buffer = 'reward-train epoch %s train loss %s' % (str(total_batch), str(rewards_loss))
@@ -297,7 +298,7 @@ def main():
                         }
                         d_loss, d_acc, _ = sess.run([discriminator.loss, discriminator.accuracy, discriminator.train_op],
                                                     feed)
-                        if (total_batch % 10 == 0 or total_batch == TOTAL_BATCH - 1) and begin:
+                        if (total_batch % 20 == 0 or total_batch == TOTAL_BATCH - 1) and begin:
                             buffer = "discriminator loss %f acc %f\n" % (d_loss, d_acc)
                             print(buffer)
                             log.write(buffer)
